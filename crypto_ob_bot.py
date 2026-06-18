@@ -43,16 +43,10 @@ FVG_MIN_GAP_PCT = 0.003   # Gap minimal 0.3%
 ATR_PERIOD = 14
 ATR_MIN_MULTIPLIER = 0.5  # Volatilitas minimal = 0.5x ATR rata-rata
 
-# Session Filter (UTC)
-LONDON_START = 7    # 07:00 UTC
-LONDON_END = 12     # 12:00 UTC
-NY_START = 13       # 13:00 UTC
-NY_END = 18         # 18:00 UTC
-
 # MTF: timeframe lebih tinggi untuk konfirmasi trend
 MTF_MAP = {"4h": "1d", "1d": "1w"}
 
-# Minimum skor (maks 7)
+# Minimum skor (maks 8)
 MIN_SCORE = 3
 
 # ─── LOGGING ─────────────────────────────────────────────────────────────────
@@ -222,16 +216,6 @@ def check_mtf_trend(symbol: str, current_tf: str, ob_type: str) -> tuple:
     return False, f"HTF {higher_tf.upper()} berlawanan arah"
 
 
-def check_session() -> tuple:
-    """Cek apakah saat ini dalam sesi London atau New York."""
-    now_utc = datetime.now(timezone.utc)
-    hour = now_utc.hour
-    if LONDON_START <= hour < LONDON_END:
-        return True, f"Sesi London ({hour:02d}:00 UTC)"
-    elif NY_START <= hour < NY_END:
-        return True, f"Sesi New York ({hour:02d}:00 UTC)"
-    return False, f"Di luar sesi utama ({hour:02d}:00 UTC)"
-
 
 def check_atr_volatility(df: pd.DataFrame) -> tuple:
     """Cek apakah volatilitas cukup untuk entry."""
@@ -269,8 +253,7 @@ def detect_signals(df: pd.DataFrame, symbol: str, timeframe: str) -> list:
     current_ema_slow = df["ema_slow"].iloc[-1]
     current_vwap = df["vwap"].iloc[-1]
 
-    # Cek session & ATR sekali saja per scan
-    session_ok, session_desc = check_session()
+    # Cek ATR sekali saja per scan
     atr_ok, atr_desc = check_atr_volatility(df)
 
     for i in range(5, len(df) - 3):
@@ -366,13 +349,6 @@ def detect_signals(df: pd.DataFrame, symbol: str, timeframe: str) -> list:
             else:
                 not_confirmed.append(f"❌ {mtf_desc or 'MTF tidak tersedia'}")
 
-            # Session
-            if session_ok:
-                score += 1
-                confirmations.append(f"✅ {session_desc}")
-            else:
-                not_confirmed.append(f"❌ {session_desc}")
-
             if score >= MIN_SCORE:
                 signals.append({
                     "type": ob_type,
@@ -381,7 +357,7 @@ def detect_signals(df: pd.DataFrame, symbol: str, timeframe: str) -> list:
                     "proximity_pct": round(proximity, 2),
                     "impulse_move_pct": round(impulse_move, 2),
                     "candle_time": row["timestamp"],
-                    "score": score, "max_score": 9,
+                    "score": score, "max_score": 8,
                     "confirmations": confirmations,
                     "not_confirmed": not_confirmed,
                     "vwap": round(current_vwap, 4),
@@ -450,7 +426,7 @@ async def scan_all(bot: Bot):
     if alert_count == 0:
         await bot.send_message(
             chat_id=TELEGRAM_CHAT_ID,
-            text=f"🔍 Scan selesai `{datetime.now().strftime('%H:%M %d/%m/%Y')}`\nTidak ada sinyal skor ≥{MIN_SCORE}/9.",
+            text=f"🔍 Scan selesai `{datetime.now().strftime('%H:%M %d/%m/%Y')}`\nTidak ada sinyal skor ≥{MIN_SCORE}/8.",
             parse_mode="Markdown"
         )
 
@@ -459,7 +435,7 @@ async def scan_all(bot: Bot):
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 *SMC Scanner Pro aktif!*\n\n"
-        "9 indikator: OB + EMA + BOS/CHoCH + Sweep + VWAP + FVG + ATR + MTF + Session\n\n"
+        "8 indikator: OB + EMA + BOS/CHoCH + Sweep + VWAP + FVG + ATR + MTF\n\n"
         "/scan — Scan manual\n/status — Status\n/help — Panduan",
         parse_mode="Markdown"
     )
@@ -469,21 +445,19 @@ async def cmd_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await scan_all(context.bot)
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    session_ok, session_desc = check_session()
     symbols = get_usdt_symbols()
     await update.message.reply_text(
         f"✅ *Bot aktif*\n"
         f"📊 Simbol: `{len(symbols)}`\n"
         f"⏱ TF: `{', '.join(TIMEFRAMES)}`\n"
         f"🔄 Interval: `{SCAN_INTERVAL_MINUTES} menit`\n"
-        f"🎯 Min skor: `{MIN_SCORE}/9`\n"
-        f"🕐 Sesi: `{'🟢 ' + session_desc if session_ok else '🔴 ' + session_desc}`",
+        f"🎯 Min skor: `{MIN_SCORE}/8`",
         parse_mode="Markdown"
     )
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "📖 *Sistem Skor (maks 9)*\n\n"
+        "📖 *Sistem Skor (maks 8)*\n\n"
         "1️⃣ Order Block — zona institusi\n"
         "2️⃣ EMA 20/50 — konfirmasi trend\n"
         "3️⃣ BOS/CHoCH — struktur market\n"
@@ -492,8 +466,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "6️⃣ FVG — Fair Value Gap belum terisi\n"
         "7️⃣ ATR — volatilitas cukup\n"
         "8️⃣ MTF — konfirmasi timeframe lebih tinggi\n"
-        "9️⃣ Session — sesi London/New York\n\n"
-        f"*Alert dikirim jika skor ≥ {MIN_SCORE}/9*\n\n"
+        f"*Alert dikirim jika skor ≥ {MIN_SCORE}/8*\n\n"
         "⚠️ _Bukan financial advice._",
         parse_mode="Markdown"
     )
