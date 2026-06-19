@@ -20,11 +20,11 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 TIMEFRAMES = ["4h", "1d"]
 SCAN_INTERVAL_MINUTES = 30
-MAX_SYMBOLS = 100
+MAX_SYMBOLS = 200
 
 # OB
 OB_MIN_BODY_RATIO = 0.6
-OB_VOLUME_MULTIPLIER = 1.5
+OB_VOLUME_MULTIPLIER = 1.2
 
 # EMA
 EMA_FAST = 20
@@ -47,7 +47,7 @@ ATR_MIN_MULTIPLIER = 0.5  # Volatilitas minimal = 0.5x ATR rata-rata
 MTF_MAP = {"4h": "1d", "1d": "1w"}
 
 # Minimum skor (maks 8)
-MIN_SCORE = 3
+MIN_SCORE = 2
 
 # ─── LOGGING ─────────────────────────────────────────────────────────────────
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -285,7 +285,7 @@ def detect_signals(df: pd.DataFrame, symbol: str, timeframe: str) -> list:
                 ob_high, ob_low = row["close"], row["open"]
                 proximity = (current_price - ob_low) / ob_low * 100
 
-            if not (-2.0 <= proximity <= 2.0):
+            if not (-5.0 <= proximity <= 5.0):
                 continue
 
             score = 1
